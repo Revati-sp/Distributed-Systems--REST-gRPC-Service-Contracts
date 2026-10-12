@@ -1,0 +1,203 @@
+$ python tests/run_all_tests.py   # run on 2026-10-11 14:22 PDT, Python 3.12.13, macOS
+
+======================================================================
+REST: Order (5050) -> Inventory (5001)
+======================================================================
+
+  GET http://127.0.0.1:5050/health
+    HTTP 200  {"inventory_timeout_seconds":2.0,"inventory_url":"http://127.0.0.1:5001","pid":37518,"service":"order-rest","status":"ok","uptime_seconds":0.2}
+
+-- Normal Inventory --
+
+  POST http://127.0.0.1:5050/orders  {"item_id": "item-1", "quantity": 2}
+    HTTP 200 in 0.01s  {"inventory":{"available":true,"available_quantity":10,"item_id":"item-1","message":"2 unit(s) of 'item-1' available.","requested_quantity":2},"item_id":"item-1","order_id":"ord-733893b8","quantity":2,"status":"confirmed"}
+  [PASS] REST successful order -> 200
+
+  POST http://127.0.0.1:5050/orders  {"item_id": "item-999", "quantity": 1}
+    HTTP 404 in 0.00s  {"error":"ITEM_NOT_FOUND","message":"Item 'item-999' does not exist.","order_id":"ord-81c3c31a","status":"rejected"}
+  [PASS] REST unknown item -> 404
+
+  POST http://127.0.0.1:5050/orders  {"item_id": "item-2", "quantity": 50}
+    HTTP 409 in 0.00s  {"error":"INSUFFICIENT_INVENTORY","message":"Requested 50 of 'item-2', but only 5 in stock.","order_id":"ord-87cbbcc4","status":"rejected"}
+  [PASS] REST insufficient quantity -> 409
+
+  POST http://127.0.0.1:5050/orders  {"item_id": "item-1", "quantity": -3}
+    HTTP 400 in 0.00s  {"error":"INVALID_ARGUMENT","message":"'quantity' must be greater than 0.","status":"rejected"}
+  [PASS] REST invalid quantity -> 400
+
+  POST http://127.0.0.1:5050/orders  {"quantity": 1}
+    HTTP 400 in 0.00s  {"error":"INVALID_ARGUMENT","message":"'item_id' is required and must be a non-empty string.","status":"rejected"}
+  [PASS] REST missing item_id -> 400
+
+-- Restarting REST Inventory with --delay 5.0 (> 2.0s timeout) --
+
+  POST http://127.0.0.1:5050/orders  {"item_id": "item-1", "quantity": 1}
+    HTTP 504 in 2.01s  {"error":"INVENTORY_TIMEOUT","message":"Inventory Service did not respond within 2.0s.","order_id":"ord-b65d28e2","status":"rejected"}
+  [PASS] REST timeout -> 504
+  [PASS] REST timeout returned promptly (~timeout, not delay)  (2.01s)
+
+  GET http://127.0.0.1:5050/health
+    HTTP 200  {"inventory_timeout_seconds":2.0,"inventory_url":"http://127.0.0.1:5001","pid":37518,"service":"order-rest","status":"ok","uptime_seconds":2.4}
+  [PASS] REST Order Service healthy after timeout (same PID)  (pid=37518)
+
+-- Stopping REST Inventory entirely --
+
+  POST http://127.0.0.1:5050/orders  {"item_id": "item-1", "quantity": 1}
+    HTTP 503 in 0.01s  {"error":"INVENTORY_UNAVAILABLE","message":"Could not connect to Inventory Service at http://127.0.0.1:5001.","order_id":"ord-fc1a2b43","status":"rejected"}
+  [PASS] REST Inventory down -> 503
+
+-- Restarting REST Inventory in normal mode --
+
+  POST http://127.0.0.1:5050/orders  {"item_id": "item-1", "quantity": 1}
+    HTTP 200 in 0.00s  {"inventory":{"available":true,"available_quantity":10,"item_id":"item-1","message":"1 unit(s) of 'item-1' available.","requested_quantity":1},"item_id":"item-1","order_id":"ord-32f315d5","quantity":1,"status":"confirmed"}
+
+  GET http://127.0.0.1:5050/health
+    HTTP 200  {"inventory_timeout_seconds":2.0,"inventory_url":"http://127.0.0.1:5001","pid":37518,"service":"order-rest","status":"ok","uptime_seconds":2.7}
+  [PASS] REST Order Service serves orders again after failures (same PID)
+
+======================================================================
+gRPC: Order client -> Inventory (50051)
+======================================================================
+  gRPC Order client (pid=37526) -> 127.0.0.1:50051, deadline=2.0s
+
+-- Normal Inventory --
+
+  order> item-1 2
+    [order-grpc pid=37526] CheckInventory(item_id='item-1', quantity=2) deadline=2.0s
+    {
+      "status": "confirmed",
+      "order_id": "ord-97a1a54f",
+      "grpc_status": "OK",
+      "item_id": "item-1",
+      "quantity": 2,
+      "inventory": {
+        "available": true,
+        "available_quantity": 10,
+        "message": "2 unit(s) of 'item-1' available."
+      },
+      "elapsed_seconds": 0.002
+    }
+  [PASS] gRPC successful order -> OK
+
+  order> item-999 1
+    [order-grpc pid=37526] CheckInventory(item_id='item-999', quantity=1) deadline=2.0s
+    {
+      "status": "rejected",
+      "order_id": "ord-24afaa88",
+      "grpc_status": "NOT_FOUND",
+      "message": "Item 'item-999' does not exist.",
+      "elapsed_seconds": 0.0
+    }
+  [PASS] gRPC unknown item -> NOT_FOUND
+
+  order> item-2 50
+    [order-grpc pid=37526] CheckInventory(item_id='item-2', quantity=50) deadline=2.0s
+    {
+      "status": "rejected",
+      "order_id": "ord-12d0effa",
+      "grpc_status": "RESOURCE_EXHAUSTED",
+      "message": "Requested 50 of 'item-2', but only 5 in stock.",
+      "elapsed_seconds": 0.0
+    }
+  [PASS] gRPC insufficient quantity -> RESOURCE_EXHAUSTED
+
+  order> item-1 0
+    [order-grpc pid=37526] CheckInventory(item_id='item-1', quantity=0) deadline=2.0s
+    {
+      "status": "rejected",
+      "order_id": "ord-3b6729f8",
+      "grpc_status": "INVALID_ARGUMENT",
+      "message": "quantity must be greater than 0.",
+      "elapsed_seconds": 0.0
+    }
+  [PASS] gRPC invalid quantity -> INVALID_ARGUMENT
+
+  order> bad!id 1
+    [order-grpc pid=37526] CheckInventory(item_id='bad!id', quantity=1) deadline=2.0s
+    {
+      "status": "rejected",
+      "order_id": "ord-6e19a8a3",
+      "grpc_status": "INVALID_ARGUMENT",
+      "message": "item_id may only contain letters, digits, '-' or '_' (max 64 chars).",
+      "elapsed_seconds": 0.0
+    }
+  [PASS] gRPC invalid item_id -> INVALID_ARGUMENT
+
+-- Restarting gRPC Inventory with --delay 5.0 (> 2.0s deadline) --
+
+  order> item-1 1
+    [order-grpc pid=37526] CheckInventory(item_id='item-1', quantity=1) deadline=2.0s
+    {
+      "status": "failed",
+      "order_id": "ord-437d6046",
+      "grpc_status": "DEADLINE_EXCEEDED",
+      "message": "Deadline Exceeded",
+      "elapsed_seconds": 2.008
+    }
+  [PASS] gRPC deadline -> DEADLINE_EXCEEDED
+  [PASS] gRPC deadline enforced (~deadline, not delay)  (2.008s)
+
+  order> health
+    [order-grpc pid=37526] Order client alive; Inventory HealthCheck:
+    {
+      "status": "SERVING",
+      "service": "inventory-grpc",
+      "pid": 37531,
+      "uptime_seconds": 2.1,
+      "delay_seconds": 5.0
+    }
+  [PASS] gRPC Order client alive after deadline; Inventory HealthCheck SERVING
+
+-- Stopping gRPC Inventory entirely --
+
+  order> item-1 1
+    [order-grpc pid=37526] CheckInventory(item_id='item-1', quantity=1) deadline=2.0s
+    {
+      "status": "failed",
+      "order_id": "ord-4e26583f",
+      "grpc_status": "UNAVAILABLE",
+      "message": "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: Connection refused",
+      "elapsed_seconds": 0.001
+    }
+  [PASS] gRPC Inventory down -> UNAVAILABLE
+
+-- Restarting gRPC Inventory in normal mode --
+
+  order> health
+    [order-grpc pid=37526] Order client alive; Inventory HealthCheck:
+    {
+      "status": "unreachable",
+      "grpc_status": "UNAVAILABLE",
+      "message": "failed to connect to all addresses; last error: UNKNOWN: ipv4:127.0.0.1:50051: Failed to connect to remote host: Connection refused"
+    }
+
+  order> health
+    [order-grpc pid=37526] Order client alive; Inventory HealthCheck:
+    {
+      "status": "SERVING",
+      "service": "inventory-grpc",
+      "pid": 37540,
+      "uptime_seconds": 0.6,
+      "delay_seconds": 0.0
+    }
+
+  order> item-1 1
+    [order-grpc pid=37526] CheckInventory(item_id='item-1', quantity=1) deadline=2.0s
+    {
+      "status": "confirmed",
+      "order_id": "ord-da5a0e16",
+      "grpc_status": "OK",
+      "item_id": "item-1",
+      "quantity": 1,
+      "inventory": {
+        "available": true,
+        "available_quantity": 10,
+        "message": "1 unit(s) of 'item-1' available."
+      },
+      "elapsed_seconds": 0.001
+    }
+  [PASS] gRPC Order client serves orders again after failures (same PID)  (pid=37526)
+
+======================================================================
+SUMMARY: 20/20 checks passed
+Service logs: <project-root>/tests/logs

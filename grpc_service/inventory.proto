@@ -1,0 +1,54 @@
+// inventory.proto
+//
+// The gRPC service contract for the Inventory Service.
+//
+// In gRPC the contract is defined FIRST, in this file, using Protocol Buffers.
+// The protoc compiler then generates strongly-typed Python classes for the
+// messages (inventory_pb2.py) and a client stub + server base class for the
+// service (inventory_pb2_grpc.py). Compare this with REST, where the "contract"
+// is an informal agreement about URLs, JSON field names and HTTP status codes.
+
+syntax = "proto3";
+
+package inventory;
+
+// The Inventory Service exposes one business RPC (CheckInventory) and one
+// lightweight HealthCheck RPC used to prove the server is still alive.
+service InventoryService {
+  // Checks whether `quantity` units of `item_id` are in stock.
+  //
+  // Errors are reported with gRPC status codes, not inside the response body:
+  //   INVALID_ARGUMENT   - item_id is blank/malformed or quantity <= 0
+  //   NOT_FOUND          - item_id is not in the inventory
+  //   RESOURCE_EXHAUSTED - item exists but not enough units are in stock
+  //   DEADLINE_EXCEEDED  - (raised on the client) the server took too long
+  rpc CheckInventory (CheckInventoryRequest) returns (CheckInventoryResponse);
+
+  // Returns immediately (never delayed) so callers can verify liveness.
+  rpc HealthCheck (HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+// The numbers (= 1, = 2, ...) are field tags used in the binary wire format.
+// They must never be changed once clients are deployed.
+message CheckInventoryRequest {
+  string item_id = 1;
+  int32 quantity = 2;
+}
+
+message CheckInventoryResponse {
+  bool available = 1;
+  string item_id = 2;
+  int32 requested_quantity = 3;
+  int32 available_quantity = 4;
+  string message = 5;
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  string status = 1;        // "SERVING"
+  string service = 2;       // "inventory-grpc"
+  int32 pid = 3;            // process id - unchanged pid proves no restart
+  double uptime_seconds = 4;
+  double delay_seconds = 5; // configured artificial delay (0 = normal mode)
+}
