@@ -30,7 +30,7 @@ Both versions use the same inventory data, the same validation rules and a timeo
 12. [REST vs gRPC comparison](#12-rest-vs-grpc-comparison)
 13. [Automated test script](#13-automated-test-script)
 14. [Testing checklist](#14-testing-checklist)
-15. [Screenshot guide](#15-screenshot-guide)
+15. [Screenshot evidence](#15-screenshot-evidence)
 
 > **About the outputs in this README:** every terminal block is real output, copied from running these exact commands on macOS with Python 3.12.13. When you run them yourself, values such as `order_id`, `pid`, `Date` and timings will be different.
 
@@ -71,6 +71,8 @@ Both versions use the same inventory data, the same validation rules and a timeo
 | REST Inventory Service | `http://127.0.0.1:5001` |
 | REST Order Service | `http://127.0.0.1:5050` |
 | gRPC Inventory Service | `127.0.0.1:50051` |
+
+> **Why is the gRPC Order side a client, not a server?** The interaction being compared is **Order → Inventory**, and in that call the Order side is always the *caller*. In REST, the Order Service exposes `POST /orders` so that you can trigger it with `curl`. In gRPC, the Inventory Service is the gRPC server (`InventoryService.CheckInventory` in `inventory.proto`), and the Order side is a gRPC **client flow** ([`order_client.py`](grpc_service/order_client.py)) that makes the same call with a deadline. Its `--interactive` mode runs as a long-lived Order process, which is what [section 11](#11-evidence-that-the-order-service-keeps-running) uses to prove it stays running after a `DEADLINE_EXCEEDED`.
 
 > **Why 5050 instead of 5000?** On macOS 12 and later, port 5000 is already used by the AirPlay Receiver (`ControlCenter`), so requests to `localhost:5000` reach Apple's service instead of this project. If port 5000 is free on your machine, you can still use it with `ORDER_SERVICE_PORT=5000 python rest/order_service.py`.
 
@@ -824,21 +826,68 @@ Each assignment requirement, where this README shows the evidence, and the match
 
 ---
 
-## 15. Screenshot guide
+## 15. Screenshot evidence
 
-If your submission needs screenshots, capture the blocks marked 📸 in this README:
+Screenshots of the steps above, run by hand on macOS. They're stored in [`docs/screenshots/`](docs/screenshots/), and each one corresponds to a 📸 marker earlier in this README.
 
-| # | Section | What must be visible |
-|---|---|---|
-| 1 | §6 | `curl -si ... item-1, quantity 2` → `HTTP/1.1 200 OK` and the `"status":"confirmed"` body |
-| 2 | §7 | `order_client.py --item-id item-1 --quantity 2` → `"grpc_status": "OK"` |
-| 3 | §8 | The REST `404`, `409` and `400` responses |
-| 4 | §8 | The gRPC `NOT_FOUND`, `RESOURCE_EXHAUSTED` and `INVALID_ARGUMENT` outputs |
-| 5 | §9 | Terminal 1 with `delay=5.0s` **and** Terminal 3 with `HTTP/1.1 504 GATEWAY TIMEOUT` and `2.0… total` |
-| 6 | §10 | Terminal 1 with `delay=5.0s` **and** Terminal 2 with `"grpc_status": "DEADLINE_EXCEEDED"` and `elapsed_seconds` ≈ 2.0 |
-| 7 | §10 | The server log line `Client deadline already expired ... abandoning request` |
-| 8 | §11 | REST: `200 OK` after the timeout, plus `/health` with the **same pid** as before |
-| 9 | §11 | gRPC `--interactive` session: `OK` → `DEADLINE_EXCEEDED` → `OK`, all with the same `pid` |
-| 10 | §13 | `SUMMARY: 20/20 checks passed` |
+### REST
 
-Tip: arrange the terminals side by side so a single screenshot shows both the delayed Inventory Service and the Order side's clean failure.
+**Services running** (Inventory on 5001 with `delay=0.0s`; Order on 5050 with `timeout=2.0s`; both `/health` checks OK)
+
+![REST services running](docs/screenshots/01_rest_services_running.png)
+
+**Successful order: `200 OK`** (§6)
+
+![REST 200](docs/screenshots/02_rest_success_200.png)
+
+**Failures: `404`, `409`, `400`** (§8)
+
+![REST 404 409 400](docs/screenshots/03_rest_errors_404_409_400.png)
+
+**Inventory restarted with `--delay 5`** (§9)
+
+![REST inventory delay mode](docs/screenshots/04_rest_inventory_delay_mode.png)
+
+**Clean timeout: `504 GATEWAY TIMEOUT` after about 2 s, with the Order log line `Inventory timed out after 2.00s`** (§9)
+
+![REST 504 timeout](docs/screenshots/05_rest_timeout_504.png)
+
+**Order Service still alive after the timeout: same `pid`** (§11)
+
+![REST order alive after timeout](docs/screenshots/06_rest_order_alive_after_timeout.png)
+
+**Successful order after the timeout, from the same Order Service process** (§11)
+
+![REST success after timeout](docs/screenshots/07_rest_success_after_timeout.png)
+
+### gRPC
+
+**Code generated from `inventory.proto`; server listening on 50051**
+
+![gRPC codegen and server](docs/screenshots/08_grpc_codegen_and_server.png)
+
+**Successful order: `OK`** (§7)
+
+![gRPC OK](docs/screenshots/09_grpc_success_ok_Terminal2.png)
+
+**Failures: `NOT_FOUND`, `RESOURCE_EXHAUSTED`, `INVALID_ARGUMENT`** (§8)
+
+![gRPC errors](docs/screenshots/10_grpc_errors_Terminal2.png)
+
+**Clean deadline: server with `delay=5.0s`; client `DEADLINE_EXCEEDED` after 2.007 s; server log `abandoning request`** (§10)
+
+![gRPC deadline exceeded](docs/screenshots/11_grpc_deadline_exceeded.png)
+
+**One long-lived Order client (`pid=15222`): `OK` → `DEADLINE_EXCEEDED` → `health: SERVING` → `OK`** (§11)
+
+![gRPC client alive after deadline](docs/screenshots/12_grpc_client_alive_after_deadline_T1%26T2.png)
+
+![gRPC interactive session](docs/screenshots/12a_grpc_interactive_deadline_Terminal2_Health_Serving.png)
+
+![gRPC interactive recovered and exited normally](docs/screenshots/12b_grpc_interactive_recovered.png)
+
+### Automated tests
+
+**`python tests/run_all_tests.py` → `SUMMARY: 20/20 checks passed`** (§13)
+
+![20 of 20 checks passed](docs/screenshots/13_automated_tests_20_of_20.png)
