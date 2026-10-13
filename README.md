@@ -182,6 +182,8 @@ python rest/order_service.py
 
 **Terminal 3: check that both services are up**
 
+> 📸 **Screenshot 01** (`01_rest_services_running.png`): Terminals 1–3 after these steps.
+
 ```bash
 curl -s http://127.0.0.1:5050/health
 curl -s http://127.0.0.1:5001/health
@@ -250,6 +252,8 @@ message CheckInventoryResponse {
 
 **Step 2 (Terminal 1): start the gRPC Inventory Service on port 50051**
 
+> 📸 **Screenshot 08** (`08_grpc_codegen_and_server.png`): the code-generation output and the server's `listening on 127.0.0.1:50051` line.
+
 ```bash
 python grpc_service/inventory_server.py
 ```
@@ -289,7 +293,7 @@ python grpc_service/order_client.py --demo                          # run every 
 
 With both REST services running ([section 4](#4-running-the-rest-version)), place an order for 2 units of `item-1`:
 
-> 📸 **Screenshot 1:** this request and its response.
+> 📸 **Screenshot 02** (`02_rest_success_200.png`): this request and its response.
 
 ```text
 $ curl -si -X POST http://127.0.0.1:5050/orders -H 'Content-Type: application/json' -d '{"item_id": "item-1", "quantity": 2}'
@@ -329,7 +333,7 @@ The same JSON body, formatted for readability:
 
 With the gRPC Inventory Service running ([section 5](#5-running-the-grpc-version)):
 
-> 📸 **Screenshot 2:** this command and its output.
+> 📸 **Screenshot 09** (`09_grpc_success_ok_Terminal2.png`): this command and its output.
 
 ```text
 $ python grpc_service/order_client.py --item-id item-1 --quantity 2
@@ -361,7 +365,7 @@ $ python grpc_service/order_client.py --item-id item-1 --quantity 2
 
 ### REST failures
 
-> 📸 **Screenshot 3:** these four requests and responses.
+> 📸 **Screenshot 03** (`03_rest_errors_404_409_400.png`): these four requests and responses.
 
 ```text
 $ curl -si -X POST http://127.0.0.1:5050/orders -H 'Content-Type: application/json' -d '{"item_id": "item-999", "quantity": 1}'
@@ -413,7 +417,7 @@ Connection: close
 
 ### gRPC failures
 
-> 📸 **Screenshot 4:** these four commands and outputs.
+> 📸 **Screenshot 10** (`10_grpc_errors_Terminal2.png`): these four commands and outputs.
 
 ```text
 $ python grpc_service/order_client.py --item-id item-999 --quantity 1
@@ -506,7 +510,7 @@ The delay applies only to `POST /inventory/check`. `GET /health` still answers i
 
 In **Terminal 3** (`time` measures how long the call takes):
 
-> 📸 **Screenshot 5:** Terminal 1 showing `delay=5.0s`, plus this request and response showing `504` and about `2.0 total`.
+> 📸 **Screenshots 04 and 05** (`04_rest_inventory_delay_mode.png`, `05_rest_timeout_504.png`): Terminal 1 showing `delay=5.0s`, plus this request and response showing `504` and about `2.0 total`.
 
 ```text
 $ time curl -si -X POST http://127.0.0.1:5050/orders -H 'Content-Type: application/json' -d '{"item_id": "item-1", "quantity": 1}'
@@ -577,7 +581,7 @@ The delay applies only to `CheckInventory`. The `HealthCheck` RPC still answers 
 
 In **Terminal 2**:
 
-> 📸 **Screenshot 6:** Terminal 1 showing `delay=5.0s`, plus this command and output showing `DEADLINE_EXCEEDED` and about 2.0 s.
+> 📸 **Screenshot 11** (`11_grpc_deadline_exceeded.png`): Terminal 1 showing `delay=5.0s`, plus this command and output showing `DEADLINE_EXCEEDED` and about 2.0 s.
 
 ```text
 $ time python grpc_service/order_client.py --item-id item-1 --quantity 1
@@ -594,7 +598,7 @@ $ time python grpc_service/order_client.py --item-id item-1 --quantity 1
 
 gRPC Inventory Service log (Terminal 1):
 
-> 📸 **Screenshot 7:** the `abandoning request` line.
+> 📸 **Screenshot 11** (same image): the `abandoning request` line.
 
 ```text
 2026-10-11 14:38:57,102 [inventory-grpc] INFO Delay mode: sleeping 5.0s before answering
@@ -642,7 +646,7 @@ $ curl -s http://127.0.0.1:5050/health
 
 **Step 3.** Send the same order again to the same Order Service:
 
-> 📸 **Screenshot 8:** both commands below, showing `200 OK` and `"pid":39516`, the same pid as before the timeout.
+> 📸 **Screenshots 06 and 07** (`06_rest_order_alive_after_timeout.png`, `07_rest_success_after_timeout.png`): both commands below, showing `200 OK` and the same Order Service pid as before the timeout.
 
 ```text
 $ curl -si -X POST http://127.0.0.1:5050/orders -H 'Content-Type: application/json' -d '{"item_id": "item-1", "quantity": 1}'
@@ -680,7 +684,7 @@ Each single-shot `order_client.py --item-id ...` command starts a new process, s
 1. **Terminal 1:** `python grpc_service/inventory_server.py` (normal mode).
 2. **Terminal 2:** `python grpc_service/order_client.py --interactive`. Then type the lines shown below, restarting the server in Terminal 1 where the `── Terminal 1 ──` notes indicate.
 
-> 📸 **Screenshot 9:** this entire Terminal 2 session, showing `OK`, then `DEADLINE_EXCEEDED`, then `OK`, all with `pid=39648`.
+> 📸 **Screenshots 12, 12a and 12b** (`12_grpc_client_alive_after_deadline_T1&T2.png`, `12a_…`, `12b_…`): this entire Terminal 2 session, showing `OK`, then `DEADLINE_EXCEEDED`, then `OK`, all with the same client pid.
 
 ```text
 $ python grpc_service/order_client.py --interactive
@@ -776,7 +780,7 @@ python tests/run_all_tests.py
 
 It takes about 10 seconds and ends with:
 
-> 📸 **Screenshot 10:** the summary line.
+> 📸 **Screenshot 13** (`13_automated_tests_20_of_20.png`): the summary line.
 
 ```text
 ======================================================================
@@ -828,7 +832,9 @@ Each assignment requirement, where this README shows the evidence, and the match
 
 ## 15. Screenshot evidence
 
-Screenshots of the steps above, run by hand on macOS. They're stored in [`docs/screenshots/`](docs/screenshots/), and each one corresponds to a 📸 marker earlier in this README.
+Screenshots of the steps above, run by hand on macOS. They're stored in [`docs/screenshots/`](docs/screenshots/). Each file is numbered to match its 📸 marker earlier in this README (Screenshot 01 = `01_….png`, and so on).
+
+> **Note on PIDs, order IDs and timestamps:** these screenshots come from a **separate manual run** from the text output in §4–§13, so their numbers differ from the text. For example, the REST Order Service is `pid 39516` in the §11 text but `pid 36034` in screenshots 04–07, and the gRPC client is `pid=39648` in the text but `pid=15222` in screenshots 12–12b. What matters is that the PID stays the same **within** each sequence. The screenshots also came from more than one terminal session: 01–03 use an earlier Order Service process (`pid 8351`), while 04–07 form one continuous session (`pid 36034`).
 
 ### REST
 
